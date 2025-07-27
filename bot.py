@@ -16,11 +16,11 @@ import pptx
 import pandas as pd
 
 # --- CONFIGURATION ---
-# IMPORTANT: Replace these with your NEW, SECURE tokens and keys.
-TELEGRAM_TOKEN = "8475830225:AAGY9bkzlkVMgZvkCTRWQ5mH9Vi26u95pLo"
-GITHUB_TOKEN = "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"
-GITHUB_REPO = "orpheusdark/ai-notes-agent" # This is correctly set from your URL
-GEMINI_API_KEY = "AIzaSyCkrXasCxaA_C-9Ib-B6pGKzGAD1Dtj1VM "
+# Load credentials securely from environment variables
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GITHUB_REPO = "orpheusdark/ai-notes-agent" # This can remain hardcoded
 
 # --- LOGGING SETUP ---
 logging.basicConfig(
@@ -28,6 +28,18 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# --- CREDENTIALS VALIDATION ---
+# Check if all necessary environment variables are set.
+if not TELEGRAM_TOKEN:
+    logger.error("FATAL: TELEGRAM_TOKEN environment variable not set.")
+    exit()
+if not GITHUB_TOKEN:
+    logger.error("FATAL: GITHUB_TOKEN environment variable not set.")
+    exit()
+if not GEMINI_API_KEY:
+    logger.error("FATAL: GEMINI_API_KEY environment variable not set.")
+    exit()
 
 
 # --- INITIALIZATION ---
