@@ -1,1 +1,1 @@
-Error: Could not process the content with the AI model.
+Error: Could not process the text content with the AI model.
