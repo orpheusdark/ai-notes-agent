@@ -18,7 +18,7 @@ import pandas as pd
 # --- CONFIGURATION ---
 # IMPORTANT: Replace these with your NEW, SECURE tokens and keys.
 TELEGRAM_TOKEN = "8475830225:AAGY9bkzlkVMgZvkCTRWQ5mH9Vi26u95pLo"
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 GITHUB_REPO = "orpheusdark/ai-notes-agent" # This is correctly set from your URL
 GEMINI_API_KEY = "AIzaSyCkrXasCxaA_C-9Ib-B6pGKzGAD1Dtj1VM "
 
