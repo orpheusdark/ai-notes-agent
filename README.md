@@ -4,6 +4,8 @@ Welcome to **AI Notes Agent** — your personal AI-powered content processor for
 This bot receives content like **text, images, documents**, and even **YouTube links**, and automatically creates clean, concise, and structured **Markdown notes**.  
 All notes are stored right here in this GitHub repository — creating your own **searchable knowledge base**, effortlessly. 🧠📚
 
+## @MyContentProcessorBot
+
 ---
 
 ## 🎯 Project Goal
