@@ -103,7 +103,7 @@ public:
         for (int i = 0; i < nums.size(); ++i) {
             // Calculate the number we need to find
             int complement = target - nums[i];
-            
+
             // Check if the complement exists in the map already
             if (numToIndex.find(complement) != numToIndex.end()) {
                 // Found it! Return the stored index and the current index.
@@ -131,7 +131,7 @@ def twoSum(nums, target):
     :rtype: List[int]
     """
     seen = {}  # dictionary to hold number: index
-    
+
     for index, num in enumerate(nums):
         complement = target - num
         if complement in seen:

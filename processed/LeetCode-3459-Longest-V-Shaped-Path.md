@@ -1,6 +1,5 @@
 # 📚 Key Takeaways from LeetCode 3459: Longest V-Shaped Diagonal Segment
 
-> This document summarizes the solution to LeetCode problem 3459, focusing on the core algorithm and its clever optimizations.  The problem involves finding the longest path in a grid following a specific "V-shaped" diagonal pattern, which is efficiently solved using Depth-First Search (DFS) with memoization.
 
 ## 🧠 Core Concepts 💡
 
@@ -55,4 +54,3 @@
 *   Review the complete Python code to understand the implementation of memoization.
 *   Analyze the time and space complexity of the algorithm.
 *   Consider alternative approaches to solving this problem, such as Breadth-First Search (BFS).
-

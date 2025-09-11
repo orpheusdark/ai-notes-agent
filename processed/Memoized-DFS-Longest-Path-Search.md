@@ -1,6 +1,5 @@
 # 📚 Key Takeaways from Longest Path in a Grid
 
-> This document summarizes the solution to finding the longest path in a grid containing 1s and 0s.  The core approach uses Depth-First Search (DFS) with memoization to dramatically improve efficiency, avoiding exponential time complexity. The algorithm efficiently explores all possible paths from each '1' cell, and the memoization cache ensures that each subproblem is solved only once.
 
 ## 🧠 Core Concepts 💡
 

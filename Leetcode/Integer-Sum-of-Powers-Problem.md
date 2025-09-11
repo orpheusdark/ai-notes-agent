@@ -1,7 +1,5 @@
 # 📚 Key Takeaways from Integer Sum of Powers Problem
 
-> This document summarizes the problem of expressing an integer *n* as a sum of unique integers raised to the power of *x*, along with its solution in Python.  The key challenge involves efficiently calculating the number of ways to achieve this sum, considering the constraints on *n* and *x*, and handling potential large output values using modulo arithmetic.
-
 
 ## 🧠 Core Concepts 💡
 
@@ -58,4 +56,3 @@ class Solution:
 * Analyze the time and space complexity of the provided dynamic programming solution.
 * Explore alternative approaches to solve this problem, such as using recursion or other optimization techniques.
 * Investigate the possibility of further improving the code's efficiency, especially for larger values of *n* and *x*.
-

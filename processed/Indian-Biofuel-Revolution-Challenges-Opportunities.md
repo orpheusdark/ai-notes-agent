@@ -1,9 +1,5 @@
-# Parul University - NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers 
+# Parul University - NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers
 
-This document details the questions and answers from the Parul University exam, providing explanations and structure.
-
-
-**Question 1:** 
 
 **Question:** Which of the following best describes the passage about India's biofuel revolution? 🤔
 
@@ -20,8 +16,6 @@ d. Govt role in biofuel economy.
 **Explanation:** The passage highlights both the positive aspects (reduction in imports, sustainability) and the negative aspects (food crop diversion, costs) of India's biofuel revolution.  Therefore, option c encompasses the passage's content most accurately.
 
 
-**Question 2:**
-
 **Question:** Which of the following is FALSE about the Biofuel Economy? ❌
 
 **Passage:** (Same as Question 1)
@@ -36,8 +30,6 @@ d. Govt role in biofuel economy.
 
 **Explanation:** While biofuel production aims for sustainability and self-reliance,  it's not freely available.  Its production, distribution, and costs affect its accessibility.
 
-
-**Question 3:**
 
 **Question:** Which of the following are Fundamental Duties of Indian citizens? 🤔
 
@@ -54,8 +46,6 @@ d. Govt role in biofuel economy.
 **Explanation:** All three options are correctly listed among the Fundamental Duties as described in the passage.
 
 
-**Question 4:**
-
 **Question:** Which of the following best describes the Globalization of the Economy? 🤔
 
 **Passage:** Globalization, through liberalization and privatization, has positive and negative impacts. Scholars see it as an opportunity for market access and technology, while critics see it as a strategy by developed countries to expand markets and widen economic disparities.
@@ -70,8 +60,6 @@ d. Govt role in biofuel economy.
 
 **Explanation:** The passage discusses globalization's impact on economics, socio-cultural aspects, and technology exchange, making "All of the above" the most comprehensive answer.
 
-
-**Question 5:**
 
 **Question:** Assertion (A): Critics argue that globalization widens economic disparities between nations and people. Reason (R): Developed countries use globalization primarily to expand their own markets. 🤔
 
@@ -88,8 +76,6 @@ d. Govt role in biofuel economy.
 **Explanation:** The passage directly supports both statements. The critics' argument (A) is explained by the reason (R) – developed countries using globalization for market expansion, leading to wider economic disparities.
 
 
-**Question 6:**
-
 **Question:** Assertion (A): Globalization results only in the benefits of high technology and market expansion. Reason (R): All countries experience equal benefits from globalization. 🤔
 
 **Passage:** (Same as Question 4)
@@ -104,8 +90,6 @@ d. Govt role in biofuel economy.
 
 **Explanation:** Assertion A is partially true (it ignores negative impacts), but Reason R is false because the passage states that globalization leads to unequal benefits.
 
-
-**Question 7:**
 
 **Question:** Which policy measures are linked to the process of globalization in the passage? 🤔
 
@@ -122,16 +106,12 @@ d. Govt role in biofuel economy.
 **Explanation:** The passage explicitly mentions "liberalization and privatization policies" as drivers of globalization.
 
 
-**Question 8:**
-
 **Question:** The sum of two integers is 10, and the sum of their reciprocals is 5/12. Find the integers. 🤔
 
 **Answer:** 6, 4 ✅
 
 **Explanation:** Let the integers be x and y.  We have x + y = 10 and 1/x + 1/y = 5/12. Solving these simultaneous equations yields x = 6 and y = 4 (or vice versa).
 
-
-**Question 9:**
 
 **Question:** A man sold his bike for Rs 84,000, making a 12% profit. What was the cost price? 🤔
 
@@ -140,15 +120,11 @@ d. Govt role in biofuel economy.
 **Explanation:** Let the cost price be C. Then 1.12C = 84,000. Solving for C gives C = 75,000.
 
 
-**Question 10:**
-
 **Question:** How many four-digit numbers can be formed using digits 1 to 7 (repetition allowed) that are divisible by 5? 🤔
 
 **Answer:** A. 400 ✅
 
 **Explanation:** A number is divisible by 5 if its last digit is 0 or 5.  Since 0 is not available, only 5 can be the last digit. The first three digits can be any of the seven digits (with repetition). Thus, there are 7 * 7 * 7 * 1 = 343 such numbers.  There appears to be a discrepancy between the provided answer and calculation.  The correct answer is 343, not 400.
-
-**Question 11:**
 
 **Question:** GDP measures...? 🤔
 
@@ -165,8 +141,6 @@ d) Only the production in the industrial sector.
 **Explanation:** The passage's definition of GDP directly matches option b.
 
 
-**Question 12:**
-
 **Question:** GNP is obtained from GDP by...? 🤔
 
 **Passage:** (Same as Question 11) GNP adds income from abroad and subtracts income earned by foreigners in the country.
@@ -181,8 +155,6 @@ d) Only the production in the industrial sector.
 
 **Explanation:** GNP is calculated by adding income from abroad (2) and subtracting income earned by foreigners in the country (3).
 
-
-**Question 13:**
 
 **Question:** Net National Income (NNI) signifies...? 🤔
 
@@ -199,8 +171,6 @@ d) Only the production in the industrial sector.
 **Explanation:** The passage defines NNI as GNP minus depreciation.
 
 
-**Question 14:**
-
 **Question:** What does depreciation of the Indian rupee mean? 🤔
 
 **Passage:** Depreciation of the Indian rupee means a fall in its value against foreign currencies.
@@ -215,8 +185,6 @@ d) Only the production in the industrial sector.
 
 **Explanation:** The passage directly defines rupee depreciation as a fall in its value.
 
-
-**Question 15:**
 
 **Question:** If 70 equaled $1 last year and 84 equals $1 now, what has happened to the rupee? 🤔
 
@@ -233,8 +201,6 @@ d) Only the production in the industrial sector.
 **Explanation:**  More rupees are needed to buy one dollar, indicating a depreciation of the rupee.
 
 
-**Question 16:**
-
 **Question:** Which of the following can cause rupee depreciation? 🤔
 
 **Passage:** (Same as Question 14)  Depreciation is caused by factors such as trade deficits, rising crude oil prices, capital outflows.
@@ -249,8 +215,6 @@ d) Only the production in the industrial sector.
 
 **Explanation:** Trade deficits, rising crude oil prices, and capital outflows are mentioned as causes of depreciation. Exports (4) would generally strengthen the currency.
 
-
-**Question 17:**
 
 **Question:** Which of the following best differentiates Himalayan rivers from Peninsular rivers? 🤔
 
@@ -267,8 +231,6 @@ d) Only the production in the industrial sector.
 **Explanation:** This option correctly captures the key difference mentioned in the passage regarding the flow and duration of the rivers.
 
 
-**Question 18:**
-
 **Question:** From the passage, which of the following can be reasonably inferred? 🤔
 
 **Passage:** (Same as Question 17)  Some rivers flow westward into the Arabian Sea.
@@ -283,8 +245,6 @@ d) Only the production in the industrial sector.
 
 **Explanation:** The passage explicitly states that some rivers (Narmada and Tapi) flow westward into the Arabian Sea.
 
-
-**Question 19:**
 
 **Question:** Which of the following is correct about Peninsular rivers? 🤔
 
@@ -301,8 +261,6 @@ d) Only the production in the industrial sector.
 **Explanation:** The passage clearly states that Peninsular rivers are mainly rain-fed and show seasonal variations.
 
 
-**Question 20:**
-
 **Question:** How is L related to T? 🤔
 
 **Passage:** J is T's sister; T is married to D; D is R's father; M is H's son; T is H's mother-in-law; D has only one son; J is married to B; L is B's daughter.
@@ -311,8 +269,6 @@ d) Only the production in the industrial sector.
 
 **Explanation:** L is J's daughter, and J is T's sister. Therefore, L is T's niece.
 
-
-**Question 21:**
 
 **Question:** How is M related to D? 🤔
 
@@ -323,8 +279,6 @@ d) Only the production in the industrial sector.
 **Explanation:** M is H's son, and T (H's mother-in-law) is married to D.  Therefore, M is D's grandson.
 
 
-**Question 22:**
-
 **Question:** How is J related to R? 🤔
 
 **Passage:** (Same as Question 20)
@@ -334,8 +288,6 @@ d) Only the production in the industrial sector.
 **Explanation:** J is T's sister, and T is R's mother. Therefore, J is R's aunt.
 
 
-**Question 23:**
-
 **Question:** In a row of 28 persons, Sunita's position from the left is 6th. How many people are after her? 🤔
 
 **Answer:** 21 ✅
@@ -343,16 +295,12 @@ d) Only the production in the industrial sector.
 **Explanation:** 28 (total) - 6 (Sunita's position) = 22.  However, this includes Sunita. Thus, there are 21 people after her.
 
 
-**Question 24:**
-
 **Question:** If 50% of a number is 200, what is 25% of the same number? 🤔
 
 **Answer:** 100 ✅
 
 **Explanation:** If 50% is 200, then 100% (the number) is 400.  25% of 400 is 100.
 
-
-**Question 25:**
 
 **Question:** A purse contains 1, 2, and 5 coins in the ratio 2:3:4. If the total number of coins is 27, what is the total value? 🤔
 
