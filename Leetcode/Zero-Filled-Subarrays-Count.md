@@ -1,6 +1,5 @@
 # 📚 Key Takeaways from "Number of Zero-Filled Subarrays" Problem
 
-> This document summarizes the problem of counting zero-filled subarrays within a given integer array.  It details the problem statement, examples, constraints, and potential approaches to solving it.  The key is to efficiently identify and count all contiguous subarrays composed solely of zeros.
 
 ## 🧠 Core Concepts 💡
 

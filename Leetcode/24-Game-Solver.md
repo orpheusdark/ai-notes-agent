@@ -1,7 +1,5 @@
 # 🧮 24 Game Solver: Key Takeaways
 
-> This document summarizes the rules and constraints of the 24 Game, a mathematical puzzle involving four cards and the goal of creating an expression that evaluates to 24 using basic arithmetic operations.  The document highlights the key constraints, including real division, binary operations, and the prohibition against concatenation.
-
 
 ## 🧠 Core Concepts 💡
 

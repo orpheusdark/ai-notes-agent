@@ -1,7 +1,5 @@
 # Parul University NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers
 
-This document meticulously details the questions and answers from the provided text, offering comprehensive explanations and insightful analysis.
-
 
 ## Question 26
 
@@ -16,7 +14,7 @@ This document meticulously details the questions and answers from the provided t
 
 **Correct Answer:** 1. They store more heat than land and redistribute it globally.
 
-**Explanation:** The passage explicitly states that oceans "act as natural regulators of global temperature."  This implies a significant role in heat absorption and distribution.  Options 2, 3, and 4 are not supported by the passage. 🌊🌡️
+**Explanation:** The passage explicitly states that oceans "act as natural regulators of global temperature."  This implies a significant role in heat absorption and distribution.  Options 2, 3, and 4 are not supported by the passage. 🌊🌡
 
 
 ## Question 27
