@@ -1,6 +1,6 @@
-# Parul University NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers 
+# Parul University NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers
 
-This document meticulously details the questions and answers from the provided text, offering comprehensive explanations and insightful analysis. 
+This document meticulously details the questions and answers from the provided text, offering comprehensive explanations and insightful analysis.
 
 
 ## Question 26

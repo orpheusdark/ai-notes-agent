@@ -1,9 +1,9 @@
-# Parul University - NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers 
+# Parul University - NAAC A+ CECET_Civil Services_2025_SADHNA Program Questions & Answers
 
 This document details the questions and answers from the Parul University exam, providing explanations and structure.
 
 
-**Question 1:** 
+**Question 1:**
 
 **Question:** Which of the following best describes the passage about India's biofuel revolution? 🤔
 

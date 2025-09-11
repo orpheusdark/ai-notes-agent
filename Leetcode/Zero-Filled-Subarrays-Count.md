@@ -49,4 +49,3 @@ return count
 * Test the solution with various input arrays, including edge cases (empty array, array with all zeros, array with no zeros).
 * Optimize the code for efficiency and readability.
 * Consider alternative approaches to solving the problem and compare their performance.
-

@@ -44,4 +44,3 @@ The goal is to determine if it's possible to arrange four cards (numbers 1-9) us
 *   Develop an algorithm to efficiently check all possible combinations of operations and parentheses to determine if a solution exists.  Consider backtracking or dynamic programming approaches.
 *   Implement the algorithm in a chosen programming language (e.g., Python, Java, C++).
 *   Write unit tests to verify the correctness of the algorithm for various input cases, including edge cases and examples provided.
-

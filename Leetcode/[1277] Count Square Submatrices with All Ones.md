@@ -1,4 +1,3 @@
-
 # **🔢 [1277] Count Square Submatrices with All Ones**
 
 ## **📜 1. Problem Introduction & Understanding**
@@ -170,10 +169,10 @@ This program counts all square submatrices filled with 1's in a binary matrix us
 **Example:**
 If a cell's value becomes 3, it means there are 3 squares ending here:
 - 1×1 square
-- 2×2 square  
+- 2×2 square
 - 3×3 square
 
-**Time Complexity:** O(m×n)  
+**Time Complexity:** O(m×n)
 **Space Complexity:** O(1) (modifies input in-place)
 
 The solution efficiently transforms a complex counting problem into a simple matrix traversal with minimal operations.
