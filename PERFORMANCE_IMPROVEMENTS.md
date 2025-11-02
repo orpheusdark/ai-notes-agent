@@ -26,12 +26,12 @@ This document describes the performance optimizations made to the AI Notes Agent
 **Problem:** `/list` command fetched ALL files from GitHub, reversed the entire list, then iterated through all items to find the first 5.
 
 **Solution:**
-- Sort files and use list slicing `[:5]` to take only the first 5 items
-- No longer iterates through all files unnecessarily
+- Use list slicing to take only the last 5 items from the directory listing
+- Avoids unnecessary sorting or full iteration
 
-**Impact:** Reduced time complexity from O(n) to O(n log n) for sorting, but only processes 5 items instead of all n items.
+**Impact:** Maintains O(n) time complexity but only processes last 5 items. More efficient than sorting or iterating through all files.
 
-**Changed in:** `list_files()` - Lines ~196-203
+**Changed in:** `list_files()` - Lines ~196-208
 
 ---
 

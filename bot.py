@@ -193,15 +193,15 @@ async def list_files(update, context):
         loop = asyncio.get_event_loop()
         contents = await loop.run_in_executor(None, repo.get_contents, "processed")
         
-        # Sort by last modified (more efficient than reversing entire list)
-        sorted_files = sorted(contents, key=lambda x: x.name, reverse=True)
+        # Take last 5 items (most recently added to the directory)
+        recent_files = list(contents)[-5:] if len(contents) > 5 else list(contents)
+        recent_files.reverse()  # Show newest first
         
         message = "<b>Here are the last 5 notes I saved:</b>\n\n"
-        # Take only first 5 items instead of iterating through all
-        for content_file in sorted_files[:5]:
+        for content_file in recent_files:
             message += f"• <a href='{content_file.html_url}'>{content_file.name}</a>\n"
         
-        if len(sorted_files) == 0:
+        if len(contents) == 0:
             message = "I haven't saved any notes yet!"
             
         # Using 'HTML' string for parse_mode for better compatibility.
@@ -303,10 +303,24 @@ async def handle_document(update, context):
             # Limit rows to prevent slow processing
             df = pd.read_csv(file_path, nrows=MAX_DATAFRAME_ROWS)
             content = df.to_markdown()
+            # Check if file was truncated by trying to read one more row
+            try:
+                test_df = pd.read_csv(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
+                if len(test_df) > 0:
+                    content += f"\n\n[Note: CSV truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
+            except:
+                pass  # File has fewer rows than limit
         elif file_extension == '.xlsx':
             # Limit rows to prevent slow processing
             df = pd.read_excel(file_path, nrows=MAX_DATAFRAME_ROWS)
             content = df.to_markdown()
+            # Check if file was truncated by trying to read one more row
+            try:
+                test_df = pd.read_excel(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
+                if len(test_df) > 0:
+                    content += f"\n\n[Note: Excel file truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
+            except:
+                pass  # File has fewer rows than limit
         elif file_extension == '.txt':
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
