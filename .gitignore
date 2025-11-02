@@ -103,3 +103,4 @@ dmypy.json
 *.tmp
 *.temp
 /tmp/
+temp_*
