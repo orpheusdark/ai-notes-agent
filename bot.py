@@ -151,7 +151,7 @@ def commit_to_github(filename, content):
 
 async def commit_to_github_async(filename, content):
     """Async wrapper for committing to GitHub to prevent blocking."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, commit_to_github, filename, content)
 
 
@@ -190,7 +190,7 @@ async def list_files(update, context):
     await update.message.reply_text("Fetching recent notes from GitHub...")
     try:
         # Use asyncio to run blocking GitHub API call in executor
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         contents = await loop.run_in_executor(None, repo.get_contents, "processed")
         
         # Take last 5 items (most recently added to the directory)
@@ -308,7 +308,7 @@ async def handle_document(update, context):
                 test_df = pd.read_csv(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
                 if len(test_df) > 0:
                     content += f"\n\n[Note: CSV truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
-            except:
+            except Exception:
                 pass  # File has fewer rows than limit
         elif file_extension == '.xlsx':
             # Limit rows to prevent slow processing
@@ -319,7 +319,7 @@ async def handle_document(update, context):
                 test_df = pd.read_excel(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
                 if len(test_df) > 0:
                     content += f"\n\n[Note: Excel file truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
-            except:
+            except Exception:
                 pass  # File has fewer rows than limit
         elif file_extension == '.txt':
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -363,7 +363,7 @@ async def handle_youtube(update, context):
     await update.message.reply_text("Fetching YouTube transcript...")
     try:
         # Run YouTube API call in executor to avoid blocking
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         transcript_list = await loop.run_in_executor(
             None, 
             YouTubeTranscriptApi.get_transcript, 
