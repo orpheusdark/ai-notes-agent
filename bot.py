@@ -7,6 +7,7 @@ import google.generativeai as genai
 import logging
 import asyncio
 import re
+from io import BytesIO, StringIO
 
 # Import new libraries for file processing
 from PIL import Image
@@ -21,6 +22,11 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_REPO = "orpheusdark/ai-notes-agent" # This can remain hardcoded
+
+# Performance limits
+MAX_CONTENT_LENGTH = 100000  # Maximum characters to process
+MAX_PDF_PAGES = 50  # Maximum PDF pages to process
+MAX_DATAFRAME_ROWS = 1000  # Maximum rows for Excel/CSV files
 
 # --- LOGGING SETUP ---
 logging.basicConfig(
@@ -88,6 +94,11 @@ async def process_text_with_ai(content, custom_prompt=None):
     """Sends text content to Gemini and returns a highly formatted Markdown summary."""
     logger.info("Sending TEXT content to AI for processing...")
     try:
+        # Truncate content to maximum length for efficiency
+        if len(content) > MAX_CONTENT_LENGTH:
+            logger.info(f"Content truncated from {len(content)} to {MAX_CONTENT_LENGTH} characters")
+            content = content[:MAX_CONTENT_LENGTH] + "\n\n[Content truncated due to length...]"
+        
         final_prompt = ""
         if custom_prompt:
             # If a custom prompt is provided, use it directly with the content.
@@ -117,26 +128,6 @@ async def process_text_with_ai(content, custom_prompt=None):
         logger.error(f"Error processing text with AI: {e}")
         return "Error: Could not process the text content with the AI model."
 
-async def process_image_with_ai(image_path, custom_prompt=None):
-    """Sends an image to the Gemini Vision model for a structured analysis."""
-    logger.info("Sending IMAGE content to AI for processing...")
-    try:
-        img = Image.open(image_path)
-        final_prompt = custom_prompt or (
-            "You are an expert image analyst. Please provide a detailed analysis of the following image, formatted as a structured Markdown document.\n\n"
-            "Use the following formatting guidelines:\n"
-            "1.  **Main Title:** Create a title for the image analysis, prefixed with an emoji (e.g., '🖼️ Image Analysis').\n"
-            "2.  **Headings:** Use headings like '🔍 Detailed Description', '🔑 Key Objects', and '🌍 Context and Interpretation' to structure your analysis.\n"
-            "3.  **Lists:** Use bullet points to list key objects and observations.\n"
-            "4.  **Formatting:** Use **bold** to highlight important elements.\n\n"
-            "Provide a comprehensive analysis based on these guidelines."
-        )
-        response = await model.generate_content_async([final_prompt, img])
-        logger.info("Successfully received response from Vision AI.")
-        return response.text
-    except Exception as e:
-        logger.error(f"Error processing image with AI: {e}")
-        return "Error: Could not process the image with the AI model."
 
 
 # --- GITHUB ACTIONS ---
@@ -156,6 +147,12 @@ def commit_to_github(filename, content):
     except Exception as e:
         logger.error(f"Failed to commit to GitHub: {e}")
         return False
+
+
+async def commit_to_github_async(filename, content):
+    """Async wrapper for committing to GitHub to prevent blocking."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, commit_to_github, filename, content)
 
 
 # --- TELEGRAM HANDLERS ---
@@ -192,18 +189,19 @@ async def list_files(update, context):
     """Handler for the /list command. Shows the 5 most recent files."""
     await update.message.reply_text("Fetching recent notes from GitHub...")
     try:
-        contents = repo.get_contents("processed")
-        recent_files = reversed(contents)
-        message = "<b>Here are the last 5 notes I saved:</b>\n\n"
-        count = 0
-        for content_file in recent_files:
-            if count < 5:
-                message += f"• <a href='{content_file.html_url}'>{content_file.name}</a>\n"
-                count += 1
-            else:
-                break
+        # Use asyncio to run blocking GitHub API call in executor
+        loop = asyncio.get_event_loop()
+        contents = await loop.run_in_executor(None, repo.get_contents, "processed")
         
-        if count == 0:
+        # Sort by last modified (more efficient than reversing entire list)
+        sorted_files = sorted(contents, key=lambda x: x.name, reverse=True)
+        
+        message = "<b>Here are the last 5 notes I saved:</b>\n\n"
+        # Take only first 5 items instead of iterating through all
+        for content_file in sorted_files[:5]:
+            message += f"• <a href='{content_file.html_url}'>{content_file.name}</a>\n"
+        
+        if len(sorted_files) == 0:
             message = "I haven't saved any notes yet!"
             
         # Using 'HTML' string for parse_mode for better compatibility.
@@ -221,27 +219,48 @@ async def handle_text(update, context):
     filename_base = await get_filename_from_ai(content) or f"text-{update.message.message_id}"
     processed_text = await process_text_with_ai(content)
     
-    if commit_to_github(f"{filename_base}.md", processed_text):
+    if await commit_to_github_async(f"{filename_base}.md", processed_text):
         await update.message.reply_text("Text processed and saved to GitHub.")
     else:
         await update.message.reply_text("Failed to save to GitHub.")
 
 async def handle_photo(update, context):
     file = await context.bot.get_file(update.message.photo[-1].file_id)
-    file_path = f"temp_{file.file_id}.jpg"
-    await file.download_to_drive(file_path)
     
     custom_prompt = update.message.caption
     await update.message.reply_text("Image received. Analyzing with AI...")
     
-    processed_text = await process_image_with_ai(file_path, custom_prompt)
+    # Download image directly to memory using BytesIO
+    image_bytes = BytesIO()
+    await file.download_to_memory(image_bytes)
+    image_bytes.seek(0)
+    
+    # Process image from memory
+    img = Image.open(image_bytes)
+    final_prompt = custom_prompt or (
+        "You are an expert image analyst. Please provide a detailed analysis of the following image, formatted as a structured Markdown document.\n\n"
+        "Use the following formatting guidelines:\n"
+        "1.  **Main Title:** Create a title for the image analysis, prefixed with an emoji (e.g., '🖼️ Image Analysis').\n"
+        "2.  **Headings:** Use headings like '🔍 Detailed Description', '🔑 Key Objects', and '🌍 Context and Interpretation' to structure your analysis.\n"
+        "3.  **Lists:** Use bullet points to list key objects and observations.\n"
+        "4.  **Formatting:** Use **bold** to highlight important elements.\n\n"
+        "Provide a comprehensive analysis based on these guidelines."
+    )
+    
+    try:
+        response = await model.generate_content_async([final_prompt, img])
+        processed_text = response.text
+        logger.info("Successfully received response from Vision AI.")
+    except Exception as e:
+        logger.error(f"Error processing image with AI: {e}")
+        processed_text = "Error: Could not process the image with the AI model."
+    
     filename_base = await get_filename_from_ai(processed_text) or f"image-{update.message.message_id}"
 
-    if commit_to_github(f"{filename_base}.md", processed_text):
+    if await commit_to_github_async(f"{filename_base}.md", processed_text):
         await update.message.reply_text("Image analysis complete and saved to GitHub.")
     else:
         await update.message.reply_text("Failed to save image analysis to GitHub.")
-    os.remove(file_path)
 
 async def handle_document(update, context):
     doc = update.message.document
@@ -260,23 +279,33 @@ async def handle_document(update, context):
         if file_extension == '.pdf':
             with open(file_path, 'rb') as f:
                 reader = PyPDF2.PdfReader(f)
-                for page in reader.pages:
-                    content += page.extract_text()
+                # Limit pages to prevent slow processing
+                max_pages = min(len(reader.pages), MAX_PDF_PAGES)
+                # Use list comprehension and join instead of string concatenation
+                pages_text = [reader.pages[i].extract_text() for i in range(max_pages)]
+                content = '\n'.join(pages_text)
+                if len(reader.pages) > MAX_PDF_PAGES:
+                    content += f"\n\n[Note: PDF truncated at {MAX_PDF_PAGES} pages. Original has {len(reader.pages)} pages.]"
         elif file_extension == '.docx':
             doc_reader = docx.Document(file_path)
-            for para in doc_reader.paragraphs:
-                content += para.text + "\n"
+            # Use list comprehension and join for efficiency
+            content = '\n'.join([para.text for para in doc_reader.paragraphs])
         elif file_extension == '.pptx':
             pres = pptx.Presentation(file_path)
+            # Use list comprehension and join for efficiency
+            text_parts = []
             for slide in pres.slides:
                 for shape in slide.shapes:
                     if hasattr(shape, "text"):
-                        content += shape.text + "\n"
+                        text_parts.append(shape.text)
+            content = '\n'.join(text_parts)
         elif file_extension == '.csv':
-            df = pd.read_csv(file_path)
+            # Limit rows to prevent slow processing
+            df = pd.read_csv(file_path, nrows=MAX_DATAFRAME_ROWS)
             content = df.to_markdown()
         elif file_extension == '.xlsx':
-            df = pd.read_excel(file_path)
+            # Limit rows to prevent slow processing
+            df = pd.read_excel(file_path, nrows=MAX_DATAFRAME_ROWS)
             content = df.to_markdown()
         elif file_extension == '.txt':
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -294,7 +323,7 @@ async def handle_document(update, context):
         filename_base = await get_filename_from_ai(content) or original_filename_base
         processed_content = await process_text_with_ai(content, custom_prompt)
         
-        if commit_to_github(f"{filename_base}.md", processed_content):
+        if await commit_to_github_async(f"{filename_base}.md", processed_content):
             await update.message.reply_text("Document processed and saved to GitHub.")
         else:
             await update.message.reply_text("Failed to save document to GitHub.")
@@ -319,7 +348,15 @@ async def handle_youtube(update, context):
 
     await update.message.reply_text("Fetching YouTube transcript...")
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
+        # Run YouTube API call in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        transcript_list = await loop.run_in_executor(
+            None, 
+            YouTubeTranscriptApi.get_transcript, 
+            video_id, 
+            ['en', 'en-US']
+        )
+        # Use list comprehension and join for efficiency
         transcript_text = " ".join([item['text'] for item in transcript_list])
         if not transcript_text.strip():
             await update.message.reply_text("The transcript for this video is empty.")
@@ -329,7 +366,7 @@ async def handle_youtube(update, context):
         filename_base = await get_filename_from_ai(transcript_text) or f"youtube-{video_id}"
         processed_transcript = await process_text_with_ai(transcript_text)
         
-        if commit_to_github(f"{filename_base}.md", processed_transcript):
+        if await commit_to_github_async(f"{filename_base}.md", processed_transcript):
             await update.message.reply_text("YouTube video processed and saved to GitHub.")
         else:
             await update.message.reply_text("Failed to save to GitHub.")
