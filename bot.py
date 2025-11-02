@@ -308,7 +308,7 @@ async def handle_document(update, context):
                 test_df = pd.read_csv(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
                 if len(test_df) > 0:
                     content += f"\n\n[Note: CSV truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
-            except Exception:
+            except (pd.errors.EmptyDataError, ValueError, IndexError):
                 pass  # File has fewer rows than limit
         elif file_extension == '.xlsx':
             # Limit rows to prevent slow processing
@@ -319,7 +319,7 @@ async def handle_document(update, context):
                 test_df = pd.read_excel(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
                 if len(test_df) > 0:
                     content += f"\n\n[Note: Excel file truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
-            except Exception:
+            except (pd.errors.EmptyDataError, ValueError, IndexError):
                 pass  # File has fewer rows than limit
         elif file_extension == '.txt':
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:

@@ -8,7 +8,7 @@ This document describes the performance optimizations made to the AI Notes Agent
 **Problem:** Synchronous GitHub API calls and YouTube transcript fetching were blocking the async event loop, causing delays for all users.
 
 **Solution:** 
-- Wrapped blocking operations with `asyncio.get_event_loop().run_in_executor()` to run them in a thread pool
+- Wrapped blocking operations with `asyncio.get_running_loop().run_in_executor()` to run them in a thread pool
 - Created `commit_to_github_async()` wrapper for GitHub commits
 - Made YouTube transcript fetching non-blocking
 
@@ -27,9 +27,11 @@ This document describes the performance optimizations made to the AI Notes Agent
 
 **Solution:**
 - Use list slicing to take only the last 5 items from the directory listing
-- Avoids unnecessary sorting or full iteration
+- Avoids unnecessary sorting
 
-**Impact:** Maintains O(n) time complexity but only processes last 5 items. More efficient than sorting or iterating through all files.
+**Impact:** Maintains O(n) time complexity but only processes last 5 items. More efficient than sorting which would be O(n log n).
+
+**Note:** The GitHub API `get_contents()` still fetches all file metadata. For repositories with 1000+ files, consider using GitHub's GraphQL API with pagination for further optimization.
 
 **Changed in:** `list_files()` - Lines ~196-208
 
