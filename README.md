@@ -46,6 +46,24 @@ Uses **Google's Gemini AI** to generate rich, structured notes with:
 
 ---
 
+## 📸 Screenshots — Real Project Executions
+
+Here are real screenshots of the bot in action:
+
+### 🤖 Bot Welcome & Help
+<img src="https://github.com/user-attachments/assets/28d21c22-0fe4-4327-ad6c-eb7891112773" alt="Bot Welcome and Help Screen" width="600"/>
+
+### 📝 Text Note Processing
+<img src="https://github.com/user-attachments/assets/1a38ba00-8f3b-47a6-875b-7f48a758ed17" alt="Text Note Processing" width="600"/>
+
+### 🖼️ Image & Document Processing
+<img src="https://github.com/user-attachments/assets/89d6cc87-06fc-4c71-a35d-3b0ad4c7caf7" alt="Image and Document Processing" width="600"/>
+
+### 📂 Notes Saved to GitHub
+<img src="https://github.com/user-attachments/assets/db52a092-73ff-4708-8c27-1e31792bc00d" alt="Notes Saved to GitHub Repository" width="600"/>
+
+---
+
 ## 🛠️ How It Works (Tech Stack)
 
 This project brings together several free-tier tools:
