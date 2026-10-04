@@ -45,6 +45,40 @@ Uses **Google's Gemini AI** to generate rich, structured notes with:
 - `/list` — Shows 5 latest saved notes with links
 
 ---
+## Architecture
+
+```text
+                 ┌──────────────┐
+                 │   Telegram   │
+                 └──────┬───────┘
+                        ↓
+               ┌─────────────────┐
+               │ Input Detection │
+               └────────┬────────┘
+                        ↓
+              ┌──────────────────┐
+              │ Content Extraction│
+              └─────────┬────────┘
+                        ↓
+              ┌──────────────────┐
+              │ Duplicate Check  │
+              └─────────┬────────┘
+                        ↓
+                 ┌────────────┐
+                 │  Gemini AI │
+                 └─────┬──────┘
+                       ↓
+             ┌────────────────────┐
+             │ Validate + Metadata│
+             └──────────┬─────────┘
+                        ↓
+                 ┌────────────┐
+                 │   GitHub   │
+                 └────────────┘
+```
+
+The implementation remains a single Python Telegram bot. Blocking file,
+YouTube, and GitHub operations are run outside the Telegram event loop.
 
 ## 📸 Screenshots — Real Project Executions
 
