@@ -1,412 +1,512 @@
-import os
-import telegram
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from github import Github
-from youtube_transcript_api import YouTubeTranscriptApi
-import google.generativeai as genai
-import logging
+"""Telegram entry point for the AI Notes knowledge-ingestion pipeline."""
+
 import asyncio
+import hashlib
+import html
+import json
+import logging
+import os
 import re
-from io import BytesIO, StringIO
+import tempfile
+from datetime import datetime, timezone
+from io import BytesIO
+from pathlib import Path
 
-# Import new libraries for file processing
-from PIL import Image
-import PyPDF2
 import docx
-import pptx
+import google.generativeai as genai
 import pandas as pd
+import pptx
+import PyPDF2
+from github import Github
+from github.GithubException import GithubException
+from PIL import Image
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from youtube_transcript_api import YouTubeTranscriptApi
 
-# --- CONFIGURATION ---
-# Load credentials securely from environment variables
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GITHUB_REPO = "orpheusdark/ai-notes-agent" # This can remain hardcoded
 
-# Performance limits
-MAX_CONTENT_LENGTH = 100000  # Maximum characters to process
-MAX_PDF_PAGES = 50  # Maximum PDF pages to process
-MAX_DATAFRAME_ROWS = 1000  # Maximum rows for Excel/CSV files
-
-# --- LOGGING SETUP ---
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
-# --- CREDENTIALS VALIDATION ---
-# Check if all necessary environment variables are set.
-if not TELEGRAM_TOKEN:
-    logger.error("FATAL: TELEGRAM_TOKEN environment variable not set.")
-    exit()
-if not GITHUB_TOKEN:
-    logger.error("FATAL: GITHUB_TOKEN environment variable not set.")
-    exit()
-if not GEMINI_API_KEY:
-    logger.error("FATAL: GEMINI_API_KEY environment variable not set.")
-    exit()
+# PythonAnywhere configuration.
+# Replace the three placeholder values on the server only. Do not commit real
+# credentials to GitHub.
+TELEGRAM_TOKEN = "PASTE_TELEGRAM_BOT_TOKEN_HERE"
+GITHUB_TOKEN = "PASTE_GITHUB_TOKEN_HERE"
+GEMINI_API_KEY = "PASTE_GEMINI_API_KEY_HERE"
+GEMINI_MODEL = "gemini-3.8-flash"
+GITHUB_REPO = "orpheusdark/ai-notes-agent"
+GITHUB_BRANCH = "main"
+MAX_CONTENT_LENGTH = 100_000
+MAX_MARKDOWN_LENGTH = 150_000
+MAX_PDF_PAGES = 50
+MAX_DATAFRAME_ROWS = 1_000
+MAX_FILENAME_LENGTH = 90
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".csv", ".xlsx", ".txt"}
+
+repo = None
+model = None
 
 
-# --- INITIALIZATION ---
-try:
-    # GitHub
-    g = Github(GITHUB_TOKEN)
-    repo = g.get_repo(GITHUB_REPO)
-    logger.info("Successfully connected to GitHub repository.")
-except Exception as e:
-    logger.error(f"Failed to connect to GitHub: {e}")
-    exit()
-
-try:
-    # Google Gemini
-    genai.configure(api_key=GEMINI_API_KEY)
-    # Use a single, powerful model for all tasks.
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    logger.info("Successfully configured Gemini AI model.")
-except Exception as e:
-    logger.error(f"Failed to configure Gemini API: {e}")
-    exit()
+class ProcessingError(Exception):
+    """An expected, user-safe processing failure."""
 
 
-# --- AI PROCESSING ---
-async def get_filename_from_ai(content):
-    """Generates a URL-safe filename from content using AI."""
-    logger.info("Requesting filename from AI...")
-    try:
-        prompt = (
-            "Analyze the following content and generate a concise, descriptive, URL-safe filename for it. "
-            "The filename should be 3-6 words long. Replace spaces with hyphens. Do not include any file extension. "
-            "For example, if the content is about machine learning, a good filename would be 'Introduction-to-Machine-Learning'. "
-            "Respond with ONLY the filename and nothing else."
+def initialize_services():
+    """Configure external services only when the application starts."""
+    global repo, model
+    missing = [
+        name
+        for name, value in (
+            ("TELEGRAM_TOKEN", TELEGRAM_TOKEN),
+            ("GITHUB_TOKEN", GITHUB_TOKEN),
+            ("GEMINI_API_KEY", GEMINI_API_KEY),
         )
-        response = await model.generate_content_async(f"{prompt}\n\n---\n\n{content[:2000]}") # Use first 2000 chars for efficiency
-        filename = response.text.strip().replace(" ", "-")
-        # Sanitize filename further
-        filename = re.sub(r'[^a-zA-Z0-9-]', '', filename)
-        logger.info(f"AI generated filename: {filename}")
-        return filename
-    except Exception as e:
-        logger.error(f"Error generating filename with AI: {e}")
-        return None
-
-async def process_text_with_ai(content, custom_prompt=None):
-    """Sends text content to Gemini and returns a highly formatted Markdown summary."""
-    logger.info("Sending TEXT content to AI for processing...")
+        if not value or value.startswith("PASTE_")
+    ]
+    if missing:
+        raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
     try:
-        # Truncate content to maximum length for efficiency
-        if len(content) > MAX_CONTENT_LENGTH:
-            logger.info(f"Content truncated from {len(content)} to {MAX_CONTENT_LENGTH} characters")
-            content = content[:MAX_CONTENT_LENGTH] + "\n\n[Content truncated due to length...]"
-        
-        final_prompt = ""
-        if custom_prompt:
-            # If a custom prompt is provided, use it directly with the content.
-            logger.info(f"Using custom prompt: {custom_prompt}")
-            final_prompt = f"{custom_prompt}\n\n---\n\nHere is the content to work on:\n\n{content}"
-        else:
-            # Otherwise, use the default highly-formatted note-taking prompt.
-            logger.info("Using default summarization prompt.")
-            final_prompt = (
-                "Please act as an expert note-taker and summarizer. Your task is to transform the following content into a highly structured and visually appealing Markdown document. The notes must be exceptionally easy to read, understand, and scan.\n\n"
-                "Use the following comprehensive formatting guidelines:\n"
-                "1.  **Main Title (H1):** Start with a clear, concise main title for the document, prefixed with a relevant emoji (e.g., '📚 Key Takeaways from...'). Use `#` for this.\n"
-                "2.  **Executive Summary:** Below the title, provide a short, one-paragraph summary inside a blockquote (`>`).\n"
-                "3.  **Major Sections (H2):** Use `##` for major sections, each with a relevant emoji (e.g., '## 🧠 Core Concepts').\n"
-                "4.  **Sub-topics (H3):** Use `###` for sub-topics within a major section.\n"
-                "5.  **Key Points:** Present lists of key points using nested bullet points (`*` or `-`).\n"
-                "6.  **Formatting:** Use **bold** for important terms and *italics* for emphasis. Use `code blocks` for any code snippets.\n"
-                "7.  **Emojis:** Sprinkle relevant emojis throughout the document to add visual interest and break up text, especially next to headings and key items.\n"
-                "8.  **Action Items:** If any actionable items are found, list them under a '✅ Action Items' subheading.\n\n"
-                f"Here is the content to process:\n\n---\n\n{content}"
-            )
-        
-        response = await model.generate_content_async(final_prompt)
-        logger.info("Successfully received response from AI.")
-        return response.text
-    except Exception as e:
-        logger.error(f"Error processing text with AI: {e}")
-        return "Error: Could not process the text content with the AI model."
+        repo = Github(GITHUB_TOKEN).get_repo(GITHUB_REPO)
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        logger.info("External services configured for %s", GITHUB_REPO)
+    except Exception as exc:
+        logger.error("Service initialization failed: %s", exc)
+        raise RuntimeError("Could not initialize external services") from exc
 
 
-
-# --- GITHUB ACTIONS ---
-def commit_to_github(filename, content):
-    """Commits the processed content to the GitHub repository."""
-    filepath = f"processed/{filename}"
-    logger.info(f"Attempting to commit '{filepath}' to GitHub...")
-    try:
-        try:
-            contents = repo.get_contents(filepath, ref="main")
-            repo.update_file(contents.path, f"Update: {filename}", content, contents.sha, branch="main")
-            logger.info(f"Successfully updated '{filepath}' on GitHub.")
-        except Exception:
-            repo.create_file(filepath, f"Create: {filename}", content, branch="main")
-            logger.info(f"Successfully created '{filepath}' on GitHub.")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to commit to GitHub: {e}")
-        return False
+def normalize_content(content: str) -> str:
+    """Normalize harmless text differences before hashing."""
+    return re.sub(r"\s+", " ", content).strip().casefold()
 
 
-async def commit_to_github_async(filename, content):
-    """Async wrapper for committing to GitHub to prevent blocking."""
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, commit_to_github, filename, content)
+def content_hash(content: str | bytes) -> str:
+    payload = content if isinstance(content, bytes) else normalize_content(content).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
-# --- TELEGRAM HANDLERS ---
-async def start(update, context):
-    """Handler for the /start command. Provides a detailed welcome message."""
-    welcome_text = (
-        "👋 <b>Welcome to your AI Notes Agent!</b>\n\n"
-        "I can help you process almost any content and save structured, easy-to-read notes to your GitHub repository.\n\n"
-        "Just send your content and I'll get to work! Use the /help command to see a full list of what I can do."
+def safe_filename(value: str | None, fallback: str) -> str:
+    """Return a readable, deterministic Markdown filename."""
+    value = (value or "").strip().replace(".md", "")
+    value = re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").lower()
+    value = value[:MAX_FILENAME_LENGTH].strip("-")
+    return f"{value or fallback}.md"
+
+
+def _yaml_string(value: str) -> str:
+    return json.dumps(str(value), ensure_ascii=True)
+
+
+def build_markdown(ai_response: dict, metadata: dict) -> str:
+    tags = "\n".join(f"  - {_yaml_string(tag)}" for tag in ai_response["tags"])
+    front_matter = [
+        "---",
+        f"title: {_yaml_string(ai_response['title'])}",
+        f"content_type: {_yaml_string(metadata['content_type'])}",
+        f"source_type: {_yaml_string(metadata['source_type'])}",
+        f"source_name: {_yaml_string(metadata['source_name'])}",
+    ]
+    if metadata.get("source_url"):
+        front_matter.append(f"source_url: {_yaml_string(metadata['source_url'])}")
+    front_matter.extend(
+        [
+            f"created_at: {_yaml_string(metadata['created_at'])}",
+            "tags:",
+            tags,
+            f"summary: {_yaml_string(ai_response['summary'])}",
+            f"content_hash: {_yaml_string(metadata['content_hash'])}",
+            "---",
+            "",
+            f"# {ai_response['title']}",
+            "",
+            f"> {ai_response['summary']}",
+            "",
+            ai_response["notes"].strip(),
+            "",
+        ]
     )
-    # Using 'HTML' string for parse_mode for better compatibility.
-    await update.message.reply_text(welcome_text, parse_mode='HTML')
+    return "\n".join(front_matter)
+
+
+def validate_ai_response(response: object) -> dict:
+    if not isinstance(response, dict):
+        raise ProcessingError("Gemini returned an invalid structured response.")
+    title = str(response.get("title", "")).strip()
+    summary = str(response.get("summary", "")).strip()
+    notes = str(response.get("notes", "")).strip()
+    tags = response.get("tags")
+    if not title or len(title) > 160:
+        raise ProcessingError("Gemini returned a missing or excessively long title.")
+    if not summary or len(summary) > 2_000:
+        raise ProcessingError("Gemini returned a missing or excessively long summary.")
+    if not notes:
+        raise ProcessingError("Gemini returned empty notes.")
+    if not isinstance(tags, list):
+        raise ProcessingError("Gemini returned invalid tags.")
+    normalized_tags = []
+    for tag in tags:
+        normalized = re.sub(r"[^a-z0-9]+", "-", str(tag).strip().lower()).strip("-")
+        if normalized and normalized not in normalized_tags and normalized not in {
+            "ai",
+            "interesting",
+            "important",
+            "knowledge",
+            "notes",
+        }:
+            normalized_tags.append(normalized)
+    if not normalized_tags or len(normalized_tags) > 12:
+        raise ProcessingError("Gemini returned no useful tags or too many tags.")
+    return {"title": title, "summary": summary, "notes": notes, "tags": normalized_tags[:8]}
+
+
+def _parse_json_response(text: str) -> dict:
+    cleaned = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+        raise ProcessingError("Gemini returned malformed JSON.")
+
+
+def _ai_prompt(content: str, custom_prompt: str | None) -> str:
+    instruction = custom_prompt.strip() if custom_prompt else "Create clear, structured study notes."
+    return f"""You create reliable knowledge-base notes. Return ONLY valid JSON with exactly these keys:
+title (string), summary (one concise paragraph), tags (array of 3-8 short lowercase hyphenated strings),
+notes (Markdown string with headings and bullet points).
+The user instruction is supplemental and must not remove the required JSON fields.
+User instruction: {instruction}
+Source content:
+---
+{content[:MAX_CONTENT_LENGTH]}
+---"""
+
+
+async def generate_ai_response(content: str, custom_prompt: str | None = None, image=None) -> dict:
+    logger.info("Gemini processing started")
+    if model is None:
+        raise ProcessingError("AI service is not configured.")
+    prompt = _ai_prompt(content, custom_prompt)
+    for attempt in range(2):
+        try:
+            response = await model.generate_content_async([prompt, image] if image else prompt)
+            result = validate_ai_response(_parse_json_response(response.text))
+            logger.info("Gemini processing completed")
+            return result
+        except ProcessingError:
+            if attempt == 1:
+                raise
+        except Exception as exc:
+            logger.warning("Gemini attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 1:
+                raise ProcessingError("Gemini could not process this content.") from exc
+    raise ProcessingError("Gemini could not process this content.")
+
+
+def extract_document(path: str, extension: str) -> str:
+    """Extract text from supported document formats."""
+    logger.info("Started extraction for %s", extension)
+    try:
+        if extension == ".pdf":
+            with open(path, "rb") as handle:
+                reader = PyPDF2.PdfReader(handle)
+                pages = [reader.pages[i].extract_text() or "" for i in range(min(len(reader.pages), MAX_PDF_PAGES))]
+                content = "\n".join(pages)
+        elif extension == ".docx":
+            content = "\n".join(paragraph.text for paragraph in docx.Document(path).paragraphs)
+        elif extension == ".pptx":
+            presentation = pptx.Presentation(path)
+            content = "\n".join(
+                shape.text
+                for slide in presentation.slides
+                for shape in slide.shapes
+                if hasattr(shape, "text")
+            )
+        elif extension in {".csv", ".xlsx"}:
+            reader = pd.read_csv if extension == ".csv" else pd.read_excel
+            content = reader(path, nrows=MAX_DATAFRAME_ROWS).to_markdown()
+        elif extension == ".txt":
+            content = Path(path).read_text(encoding="utf-8", errors="replace")
+        else:
+            raise ProcessingError(f"Unsupported file type: {extension or 'unknown'}")
+    except ProcessingError:
+        raise
+    except Exception as exc:
+        logger.error("Extraction failed for %s: %s", extension, exc)
+        raise ProcessingError("The file could not be read. It may be corrupted or unsupported.") from exc
+    if not content.strip():
+        raise ProcessingError("The document did not contain readable text.")
+    logger.info("Extraction completed")
+    return content[:MAX_CONTENT_LENGTH]
+
+
+def _github_files():
+    if repo is None:
+        raise ProcessingError("GitHub storage is not configured.")
+    return list(repo.get_contents("processed", ref=GITHUB_BRANCH))
+
+
+def _read_note(file_entry):
+    try:
+        return repo.get_contents(file_entry.path, ref=GITHUB_BRANCH).decoded_content.decode("utf-8")
+    except Exception as exc:
+        logger.warning("Could not read note %s: %s", file_entry.path, exc)
+        return ""
+
+
+def find_duplicate(hash_value: str):
+    for entry in _github_files():
+        if not entry.name.endswith(".md"):
+            continue
+        text = _read_note(entry)
+        if f'content_hash: "{hash_value}"' in text or f"content_hash: {hash_value}" in text:
+            return entry
+    return None
+
+
+def commit_to_github(filename: str, content: str) -> str:
+    if len(content) > MAX_MARKDOWN_LENGTH:
+        raise ProcessingError("The generated note is too large to store safely.")
+    if repo is None:
+        raise ProcessingError("GitHub storage is not configured.")
+    filepath = f"processed/{safe_filename(filename, 'note')}"
+    logger.info("GitHub save started")
+    try:
+        existing = repo.get_contents(filepath, ref=GITHUB_BRANCH)
+        repo.update_file(filepath, f"Update: {filepath}", content, existing.sha, branch=GITHUB_BRANCH)
+    except GithubException as exc:
+        if getattr(exc, "status", None) != 404:
+            logger.error("GitHub lookup failed: %s", exc)
+            raise ProcessingError("GitHub could not access the note repository.") from exc
+        try:
+            repo.create_file(filepath, f"Create: {filepath}", content, branch=GITHUB_BRANCH)
+        except Exception as exc:
+            logger.error("GitHub save failed: %s", exc)
+            raise ProcessingError("GitHub could not save the note. Check repository permissions.") from exc
+        logger.info("GitHub save completed")
+        return filepath
+    logger.info("GitHub save completed")
+    return filepath
+
+
+async def run_blocking(function, *args):
+    return await asyncio.get_running_loop().run_in_executor(None, function, *args)
+
+
+def note_url(filepath: str) -> str:
+    return f"https://github.com/{GITHUB_REPO}/blob/{GITHUB_BRANCH}/{filepath}"
+
+
+async def save_content(update, content: str, metadata: dict, custom_prompt: str | None = None, image=None):
+    if not content.strip():
+        raise ProcessingError("Please send some non-empty content.")
+    digest = metadata.get("content_hash") or content_hash(content)
+    logger.info("Received Telegram message; content type=%s", metadata["content_type"])
+    duplicate = await run_blocking(find_duplicate, digest)
+    if duplicate:
+        return None, note_url(duplicate.path)
+    metadata = {**metadata, "content_hash": digest, "created_at": datetime.now(timezone.utc).date().isoformat()}
+    ai_response = await generate_ai_response(content, custom_prompt, image)
+    markdown = build_markdown(ai_response, metadata)
+    validate_ai_response(ai_response)
+    filename = safe_filename(ai_response["title"], f"note-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+    filepath = await run_blocking(commit_to_github, filename, markdown)
+    return filepath, note_url(filepath)
+
+
+async def start(update, context):
+    await update.message.reply_text(
+        "👋 Send text, an image, a PDF, DOCX, PPTX, CSV, XLSX, TXT, or a YouTube link. "
+        "Use /list to see notes and /search <query> to search them."
+    )
+
 
 async def help_command(update, context):
-    """Handler for the /help command. Lists all features."""
-    help_text = (
-        "<b>Here's what I can do for you:</b>\n\n"
-        "I process various types of content and save beautifully formatted notes to your GitHub repository.\n\n"
-        "<b>You can send me:</b>\n"
-        "• 📝 <b>Text:</b> Any text message.\n"
-        "• 🖼️ <b>Images:</b> Photos you send will be analyzed.\n"
-        "• 📄 <b>Documents:</b> I can handle <code>.pdf</code>, <code>.docx</code>, <code>.pptx</code>, <code>.csv</code>, <code>.xlsx</code>, and <code>.txt</code> files.\n"
-        "• 🔗 <b>YouTube Links:</b> I'll process the video's transcript.\n\n"
-        "✨ <b>Feature: Custom Prompts!</b>\n"
-        "When you upload a file, you can add a <b>caption</b> to give me specific instructions. For example:\n"
-        "<em>'Summarize this document for a 5th grader.'</em>\n\n"
-        "<b>Available Commands:</b>\n"
-        "• /list - Shows the last 5 notes I've saved."
+    await update.message.reply_text(
+        "Commands:\n/start - welcome\n/help - this help\n/list - recent notes\n"
+        "/search <query> - search title, tags, summary, or note text\n\n"
+        "Captions on files or images are used as custom instructions."
     )
-    # Using 'HTML' string for parse_mode for better compatibility.
-    await update.message.reply_text(help_text, parse_mode='HTML')
+
 
 async def list_files(update, context):
-    """Handler for the /list command. Shows the 5 most recent files."""
-    await update.message.reply_text("Fetching recent notes from GitHub...")
     try:
-        # Use asyncio to run blocking GitHub API call in executor
-        loop = asyncio.get_running_loop()
-        contents = await loop.run_in_executor(None, repo.get_contents, "processed")
-        
-        # Take last 5 items (most recently added to the directory)
-        recent_files = list(contents)[-5:] if len(contents) > 5 else list(contents)
-        recent_files.reverse()  # Show newest first
-        
-        message = "<b>Here are the last 5 notes I saved:</b>\n\n"
-        for content_file in recent_files:
-            message += f"• <a href='{content_file.html_url}'>{content_file.name}</a>\n"
-        
-        if len(contents) == 0:
-            message = "I haven't saved any notes yet!"
-            
-        # Using 'HTML' string for parse_mode for better compatibility.
-        await update.message.reply_text(message, parse_mode='HTML', disable_web_page_preview=True)
+        entries = [entry for entry in await run_blocking(_github_files) if entry.name.endswith(".md")]
+        entries = entries[-5:][::-1]
+        if not entries:
+            await update.message.reply_text("No notes have been saved yet.")
+            return
+        lines = ["<b>Recent notes</b>"]
+        for entry in entries:
+            text = _read_note(entry)
+            title_match = re.search(r'^title:\s*["\']?(.+?)["\']?\s*$', text, re.MULTILINE)
+            date_match = re.search(r'^created_at:\s*["\']?(.+?)["\']?\s*$', text, re.MULTILINE)
+            tags_match = re.search(r"^tags:\n((?:\s+- .+\n?)+)", text, re.MULTILINE)
+            title = title_match.group(1) if title_match else entry.name.removesuffix(".md")
+            date = date_match.group(1) if date_match else "unknown date"
+            tags = ""
+            if tags_match:
+                tags = " · " + ", ".join(re.findall(r"- [\"']?([^\"'\n]+)", tags_match.group(1))[:3])
+            lines.append(
+                f"• <a href='{html.escape(entry.html_url, quote=True)}'>{html.escape(title)}</a>"
+                f" ({html.escape(date)}{html.escape(tags)})"
+            )
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as exc:
+        logger.error("Could not list files: %s", exc)
+        await update.message.reply_text("I could not fetch recent notes from GitHub.")
 
-    except Exception as e:
-        logger.error(f"Could not list files from GitHub: {e}")
-        await update.message.reply_text("Sorry, I couldn't fetch the list of files from GitHub.")
+
+async def search_command(update, context):
+    query = " ".join(context.args).strip()
+    if not query:
+        await update.message.reply_text("Usage: /search <words to find>")
+        return
+    try:
+        matches = []
+        for entry in await run_blocking(_github_files):
+            if entry.name.endswith(".md"):
+                text = _read_note(entry)
+                if query.casefold() in f"{entry.name}\n{text}".casefold():
+                    matches.append(entry)
+        if not matches:
+            await update.message.reply_text(f"No notes matched “{query}”.")
+            return
+        lines = [f"<b>Matches for {html.escape(query)}</b>"]
+        for entry in matches[:10]:
+            lines.append(f"• <a href='{html.escape(entry.html_url, quote=True)}'>{html.escape(entry.name)}</a>")
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as exc:
+        logger.error("Search failed: %s", exc)
+        await update.message.reply_text("I could not search notes right now.")
 
 
 async def handle_text(update, context):
-    await update.message.reply_text("Processing your text...")
-    content = update.message.text
-    
-    filename_base = await get_filename_from_ai(content) or f"text-{update.message.message_id}"
-    processed_text = await process_text_with_ai(content)
-    
-    if await commit_to_github_async(f"{filename_base}.md", processed_text):
-        await update.message.reply_text("Text processed and saved to GitHub.")
-    else:
-        await update.message.reply_text("Failed to save to GitHub.")
+    try:
+        filepath, url = await save_content(
+            update,
+            update.message.text,
+            {"content_type": "text", "source_type": "telegram_text", "source_name": "Telegram message"},
+        )
+        await update.message.reply_text(
+            f"Duplicate content already exists: {url}" if filepath is None else f"Note saved: {url}"
+        )
+    except ProcessingError as exc:
+        logger.warning("Text processing failed: %s", exc)
+        await update.message.reply_text(str(exc))
+
 
 async def handle_photo(update, context):
-    file = await context.bot.get_file(update.message.photo[-1].file_id)
-    
-    custom_prompt = update.message.caption
-    await update.message.reply_text("Image received. Analyzing with AI...")
-    
-    # Download image directly to memory using BytesIO
-    image_bytes = BytesIO()
-    await file.download_to_memory(image_bytes)
-    image_bytes.seek(0)
-    
-    # Process image from memory
-    img = Image.open(image_bytes)
-    final_prompt = custom_prompt or (
-        "You are an expert image analyst. Please provide a detailed analysis of the following image, formatted as a structured Markdown document.\n\n"
-        "Use the following formatting guidelines:\n"
-        "1.  **Main Title:** Create a title for the image analysis, prefixed with an emoji (e.g., '🖼️ Image Analysis').\n"
-        "2.  **Headings:** Use headings like '🔍 Detailed Description', '🔑 Key Objects', and '🌍 Context and Interpretation' to structure your analysis.\n"
-        "3.  **Lists:** Use bullet points to list key objects and observations.\n"
-        "4.  **Formatting:** Use **bold** to highlight important elements.\n\n"
-        "Provide a comprehensive analysis based on these guidelines."
-    )
-    
     try:
-        response = await model.generate_content_async([final_prompt, img])
-        processed_text = response.text
-        logger.info("Successfully received response from Vision AI.")
-    except Exception as e:
-        logger.error(f"Error processing image with AI: {e}")
-        processed_text = "Error: Could not process the image with the AI model."
-    
-    filename_base = await get_filename_from_ai(processed_text) or f"image-{update.message.message_id}"
+        telegram_file = await context.bot.get_file(update.message.photo[-1].file_id)
+        image_bytes = BytesIO()
+        await telegram_file.download_to_memory(image_bytes)
+        image_bytes.seek(0)
+        image = Image.open(image_bytes)
+        digest = hashlib.sha256(image_bytes.getvalue()).hexdigest()
+        filepath, url = await save_content(
+            update,
+            f"Image input ({image.format or 'unknown'} format). Analyze the image in detail.",
+            {
+                "content_type": "image",
+                "source_type": "telegram_image",
+                "source_name": "Telegram image",
+                "content_hash": digest,
+            },
+            update.message.caption,
+            image,
+        )
+        await update.message.reply_text(f"Duplicate image already exists: {url}" if filepath is None else f"Image note saved: {url}")
+    except (ProcessingError, OSError) as exc:
+        logger.warning("Image processing failed: %s", exc)
+        await update.message.reply_text("I could not process that image. Please send a readable image.")
 
-    if await commit_to_github_async(f"{filename_base}.md", processed_text):
-        await update.message.reply_text("Image analysis complete and saved to GitHub.")
-    else:
-        await update.message.reply_text("Failed to save image analysis to GitHub.")
 
 async def handle_document(update, context):
-    doc = update.message.document
-    file = await context.bot.get_file(doc.file_id)
-    file_path = f"temp_{doc.file_name}"
-    await file.download_to_drive(file_path)
-    
-    custom_prompt = update.message.caption
-    await update.message.reply_text(f"Document '{doc.file_name}' received. Processing...")
-
-    content = ""
-    file_extension = os.path.splitext(doc.file_name)[1].lower()
-    original_filename_base = os.path.splitext(doc.file_name)[0]
-
+    document = update.message.document
+    extension = Path(document.file_name or "").suffix.lower()
+    if extension not in SUPPORTED_EXTENSIONS:
+        await update.message.reply_text(f"Unsupported file type: {extension or 'unknown'}.")
+        return
+    temp_path = None
     try:
-        if file_extension == '.pdf':
-            with open(file_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                # Limit pages to prevent slow processing
-                max_pages = min(len(reader.pages), MAX_PDF_PAGES)
-                # Use list comprehension and join instead of string concatenation
-                pages_text = [reader.pages[i].extract_text() for i in range(max_pages)]
-                content = '\n'.join(pages_text)
-                if len(reader.pages) > MAX_PDF_PAGES:
-                    content += f"\n\n[Note: PDF truncated at {MAX_PDF_PAGES} pages. Original has {len(reader.pages)} pages.]"
-        elif file_extension == '.docx':
-            doc_reader = docx.Document(file_path)
-            # Use list comprehension and join for efficiency
-            content = '\n'.join([para.text for para in doc_reader.paragraphs])
-        elif file_extension == '.pptx':
-            pres = pptx.Presentation(file_path)
-            # Use list comprehension and join for efficiency
-            text_parts = []
-            for slide in pres.slides:
-                for shape in slide.shapes:
-                    if hasattr(shape, "text"):
-                        text_parts.append(shape.text)
-            content = '\n'.join(text_parts)
-        elif file_extension == '.csv':
-            # Limit rows to prevent slow processing
-            df = pd.read_csv(file_path, nrows=MAX_DATAFRAME_ROWS)
-            content = df.to_markdown()
-            # Check if file was truncated by trying to read one more row
-            try:
-                test_df = pd.read_csv(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
-                if len(test_df) > 0:
-                    content += f"\n\n[Note: CSV truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
-            except (pd.errors.EmptyDataError, ValueError, IndexError):
-                pass  # File has fewer rows than limit
-        elif file_extension == '.xlsx':
-            # Limit rows to prevent slow processing
-            df = pd.read_excel(file_path, nrows=MAX_DATAFRAME_ROWS)
-            content = df.to_markdown()
-            # Check if file was truncated by trying to read one more row
-            try:
-                test_df = pd.read_excel(file_path, skiprows=MAX_DATAFRAME_ROWS, nrows=1)
-                if len(test_df) > 0:
-                    content += f"\n\n[Note: Excel file truncated at {MAX_DATAFRAME_ROWS} rows. Please process smaller files for complete analysis.]"
-            except (pd.errors.EmptyDataError, ValueError, IndexError):
-                pass  # File has fewer rows than limit
-        elif file_extension == '.txt':
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-        else:
-            await update.message.reply_text(f"Sorry, I don't know how to process '{file_extension}' files yet.")
-            os.remove(file_path)
-            return
-
-        if not content.strip():
-            await update.message.reply_text("Could not extract any text from the document.")
-            os.remove(file_path)
-            return
-
-        filename_base = await get_filename_from_ai(content) or original_filename_base
-        processed_content = await process_text_with_ai(content, custom_prompt)
-        
-        if await commit_to_github_async(f"{filename_base}.md", processed_content):
-            await update.message.reply_text("Document processed and saved to GitHub.")
-        else:
-            await update.message.reply_text("Failed to save document to GitHub.")
-
-    except Exception as e:
-        logger.error(f"Failed to process document {doc.file_name}: {e}")
-        await update.message.reply_text("An error occurred while processing the document.")
+        telegram_file = await context.bot.get_file(document.file_id)
+        with tempfile.NamedTemporaryFile(prefix="ai-notes-", suffix=extension, delete=False) as temp:
+            temp_path = temp.name
+        await telegram_file.download_to_drive(temp_path)
+        content = await run_blocking(extract_document, temp_path, extension)
+        filepath, url = await save_content(
+            update,
+            content,
+            {"content_type": extension.removeprefix("."), "source_type": "uploaded_file", "source_name": document.file_name},
+            update.message.caption,
+        )
+        await update.message.reply_text(f"Duplicate document already exists: {url}" if filepath is None else f"Document saved: {url}")
+    except ProcessingError as exc:
+        logger.warning("Document processing failed: %s", exc)
+        await update.message.reply_text(str(exc))
+    except Exception as exc:
+        logger.error("Document handling failed: %s", exc)
+        await update.message.reply_text("The file could not be downloaded or processed.")
     finally:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        if temp_path:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                logger.warning("Could not remove temporary file")
 
-def extract_video_id(url):
-    match = re.search(r"(?:v=|\/|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})", url)
+
+def extract_video_id(url: str):
+    match = re.search(r"(?:v=|/|youtu\.be/|shorts/)([A-Za-z0-9_-]{11})", url)
     return match.group(1) if match else None
 
+
 async def handle_youtube(update, context):
-    url = update.message.text
-    video_id = extract_video_id(url)
+    video_id = extract_video_id(update.message.text)
     if not video_id:
-        await update.message.reply_text("Sorry, I couldn't find a valid YouTube video ID in that link.")
+        await update.message.reply_text("Please send a valid YouTube link.")
         return
-
-    await update.message.reply_text("Fetching YouTube transcript...")
     try:
-        # Run YouTube API call in executor to avoid blocking
-        loop = asyncio.get_running_loop()
-        transcript_list = await loop.run_in_executor(
-            None, 
-            YouTubeTranscriptApi.get_transcript, 
-            video_id, 
-            ['en', 'en-US']
+        transcript = await run_blocking(YouTubeTranscriptApi.get_transcript, video_id, ["en", "en-US"])
+        text = " ".join(item["text"] for item in transcript).strip()
+        if not text:
+            raise ProcessingError("This video has an empty transcript.")
+        filepath, url = await save_content(
+            update,
+            text,
+            {"content_type": "youtube_transcript", "source_type": "youtube", "source_name": video_id, "source_url": update.message.text},
         )
-        # Use list comprehension and join for efficiency
-        transcript_text = " ".join([item['text'] for item in transcript_list])
-        if not transcript_text.strip():
-            await update.message.reply_text("The transcript for this video is empty.")
-            return
+        await update.message.reply_text(f"Duplicate video already exists: {url}" if filepath is None else f"YouTube note saved: {url}")
+    except ProcessingError as exc:
+        logger.warning("YouTube processing failed: %s", exc)
+        await update.message.reply_text(str(exc))
+    except Exception as exc:
+        logger.error("YouTube transcript failed: %s", exc)
+        await update.message.reply_text("I could not fetch an English transcript for that video.")
 
-        await update.message.reply_text("Transcript found. Processing with AI...")
-        filename_base = await get_filename_from_ai(transcript_text) or f"youtube-{video_id}"
-        processed_transcript = await process_text_with_ai(transcript_text)
-        
-        if await commit_to_github_async(f"{filename_base}.md", processed_transcript):
-            await update.message.reply_text("YouTube video processed and saved to GitHub.")
-        else:
-            await update.message.reply_text("Failed to save to GitHub.")
 
-    except Exception as e:
-        logger.error(f"YouTube processing error for video ID {video_id}: {e}")
-        await update.message.reply_text("Sorry, I couldn't get a transcript for this video. It might not have English captions available.")
-
-# --- MAIN BOT LOGIC ---
 def main():
+    initialize_services()
     application = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    # Add command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("list", list_files))
-
-    # Add message handlers
-    youtube_regex = r'(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)[\w-]{11}'
+    application.add_handler(CommandHandler("search", search_command))
+    youtube_regex = r"(?:https?://)?(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)[\w-]{11}"
     application.add_handler(MessageHandler(filters.Regex(youtube_regex), handle_youtube))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-
-    logger.info("Bot is running and polling for updates...")
+    logger.info("Bot is running and polling for updates")
     application.run_polling()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
