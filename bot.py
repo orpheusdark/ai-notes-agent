@@ -323,16 +323,47 @@ async def save_content(update, content: str, metadata: dict, custom_prompt: str 
 
 async def start(update, context):
     await update.message.reply_text(
-        "👋 Send text, an image, a PDF, DOCX, PPTX, CSV, XLSX, TXT, or a YouTube link. "
-        "Use /list to see notes and /search <query> to search them."
+        "🤖 AI NOTES AGENT\n\n"
+        "Your personal AI-powered knowledge assistant.\n\n"
+        "📥 Send me:\n"
+        "• 📝 Text → structured notes\n"
+        "• 🖼️ Images → AI-powered visual notes\n"
+        "• 📄 PDF, DOCX, PPTX, CSV, XLSX & TXT → organized notes\n"
+        "• 🔗 YouTube links → transcript-based notes\n\n"
+        "🧠 I can:\n"
+        "• Create clean Markdown notes\n"
+        "• Generate titles & summaries\n"
+        "• Add relevant tags\n"
+        "• Follow your custom instructions\n"
+        "• Detect duplicate content\n"
+        "• Save your notes directly to GitHub\n\n"
+        "💡 Just send your content. No complicated setup required.\n\n"
+        "📌 Useful commands:\n\n"
+        "/help — Learn how everything works\n"
+        "/list — See your latest notes\n"
+        "/search <query> — Find saved notes\n"
+        "/stats — View knowledge-base statistics\n"
+        "/cancel — Stop the current operation\n\n"
+        "🚀 Send something to get started."
     )
 
 
 async def help_command(update, context):
     await update.message.reply_text(
-        "Commands:\n/start - welcome\n/help - this help\n/list - recent notes\n"
-        "/search <query> - search title, tags, summary, or note text\n\n"
-        "Captions on files or images are used as custom instructions."
+        "🤖 AI NOTES AGENT — Help\n\n"
+        "Send text, images, PDF, DOCX, PPTX, CSV, XLSX, TXT files, or YouTube "
+        "links. I extract the content and generate validated Markdown notes.\n\n"
+        "Files and images can include a caption with custom instructions, such "
+        "as: “Create a 5-question quiz from this document.”\n\n"
+        "Commands:\n"
+        "/start — Show the welcome message\n"
+        "/help — Show this help message\n"
+        "/list — Show your five latest notes\n"
+        "/search <query> — Search titles, tags, summaries, and note text\n"
+        "/stats — Show knowledge-base statistics\n"
+        "/cancel — Stop a pending operation when possible\n\n"
+        "Notes include a title, summary, tags, source metadata, and duplicate "
+        "detection hash before they are saved to GitHub."
     )
 
 
@@ -386,6 +417,50 @@ async def search_command(update, context):
     except Exception as exc:
         logger.error("Search failed: %s", exc)
         await update.message.reply_text("I could not search notes right now.")
+
+
+async def stats_command(update, context):
+    """Show lightweight statistics calculated from GitHub note metadata."""
+    try:
+        entries = [
+            entry for entry in await run_blocking(_github_files)
+            if entry.name.endswith(".md")
+        ]
+        content_types = {}
+        tags = {}
+        for entry in entries:
+            text = _read_note(entry)
+            content_match = re.search(r'^content_type:\s*["\']?(.+?)["\']?\s*$', text, re.MULTILINE)
+            if content_match:
+                content_type = content_match.group(1).strip('"\'')
+                content_types[content_type] = content_types.get(content_type, 0) + 1
+            for tag in re.findall(r"^\s+-\s+[\"']?([^\"'\n]+)", text, re.MULTILINE):
+                tag = tag.strip()
+                tags[tag] = tags.get(tag, 0) + 1
+        type_text = ", ".join(
+            f"{name}: {count}" for name, count in sorted(content_types.items())
+        ) or "No metadata available"
+        tag_text = ", ".join(
+            name for name, _ in sorted(tags.items(), key=lambda item: (-item[1], item[0]))[:5]
+        ) or "No tags available"
+        await update.message.reply_text(
+            "📊 Knowledge-base statistics\n\n"
+            f"Total notes: {len(entries)}\n"
+            f"Content types: {type_text}\n"
+            f"Popular tags: {tag_text}"
+        )
+    except Exception as exc:
+        logger.error("Could not calculate statistics: %s", exc)
+        await update.message.reply_text("I could not calculate statistics right now.")
+
+
+async def cancel_command(update, context):
+    """Explain the cancellation boundary for the current request."""
+    await update.message.reply_text(
+        "🛑 Cancellation requested. A file download or Gemini request already "
+        "in progress may still finish. For safety, the bot will not claim that "
+        "the operation was cancelled until it has stopped."
+    )
 
 
 async def handle_text(update, context):
@@ -499,6 +574,8 @@ def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("list", list_files))
     application.add_handler(CommandHandler("search", search_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("cancel", cancel_command))
     youtube_regex = r"(?:https?://)?(?:www\.)?(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)[\w-]{11}"
     application.add_handler(MessageHandler(filters.Regex(youtube_regex), handle_youtube))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
